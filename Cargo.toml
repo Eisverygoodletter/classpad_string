@@ -1,6 +1,6 @@
 [package]
 name = "classpad_string"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Eisverygoodletter"]
 edition = "2021"
 description = "handle XCP files and strings for the Classpad fx-400"
@@ -14,5 +14,4 @@ categories = ["encoding"]
 
 [dependencies]
 bidir-map = "1.0.0"
-hex = "0.4.3"
 lazy_static = "1.4.0"
