@@ -1,5 +1,5 @@
 //! Read and write [`ClasspadString`]s that can be stored in XCP files and loaded onto the CASIO Classpad fx-400.
-//! 
+//!
 //! This library provides the [`ClasspadChar`] (a single classpad character), [`ClasspadString`], and [`XCPFile`].
 //! Here is how you can write "this is some text" into a XCP file.
 //! ```rust
@@ -31,7 +31,7 @@ pub use attach::*;
 /**
  * Represents a character from the classpad's character code table.
  */
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ClasspadChar {
     /// Characters that follow the ASCII table.
     SingleByte(u8),
@@ -54,11 +54,9 @@ impl ClasspadChar {
             Some(Self::TwoByte(0xEC, (code - 256) as u8))
         } else if (513..=766).contains(&code) {
             Some(Self::TwoByte(0xED, (code - 512) as u8))
-        }
-        else if (769..=943).contains(&code) {
+        } else if (769..=943).contains(&code) {
             Some(Self::TwoByte(0xEE, (code - 768) as u8))
-        }
-        else {
+        } else {
             println!("invalid character code {}", code);
             None
         }
@@ -67,18 +65,16 @@ impl ClasspadChar {
     pub fn to_classpad_char(&self) -> usize {
         match self {
             Self::SingleByte(v) => *v as usize,
-            Self::TwoByte(a, b) => {
-                match a {
-                    0xEC => *b as usize + 256,
-                    0xED => *b as usize + 512,
-                    0xEE => *b as usize + 768,
-                    _ => panic!("invalid representation"),
-                }
-            }
+            Self::TwoByte(a, b) => match a {
+                0xEC => *b as usize + 256,
+                0xED => *b as usize + 512,
+                0xEE => *b as usize + 768,
+                _ => panic!("invalid representation"),
+            },
         }
     }
     /// Convert a unicode character ([`char`]) to [`ClasspadChar`].
-    /// 
+    ///
     /// Internally uses the mapping defined by [`struct@UNICODE_MAP`].
     pub fn from_unicode_char(ch: char) -> Option<Self> {
         if (32..=126).contains(&(ch as u32)) {
@@ -90,25 +86,33 @@ impl ClasspadChar {
         None
     }
     /// Convert itself into a unicode [`char`].
-    /// 
+    ///
     /// Internally uses the mapping defined by [`struct@UNICODE_MAP`].
     pub fn to_unicode_char(&self) -> Option<char> {
         match self {
             Self::SingleByte(ch) => Some(*ch as char),
-            Self::TwoByte(_, _) => {
-                UNICODE_MAP.get_by_first(&self.to_classpad_char()).copied()
-            }
+            Self::TwoByte(_, _) => UNICODE_MAP.get_by_first(&self.to_classpad_char()).copied(),
         }
+    }
+}
+impl PartialOrd for ClasspadChar {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.to_classpad_char().partial_cmp(&other.to_classpad_char())
+    }
+}
+impl Ord for ClasspadChar {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }
 
 /**
  * A string that can be stored into an XCP file for the classpad.
- * 
+ *
  * To construct one, you can use `ClasspadString::from_str`, then chain `attach_*` functions on the next statement
  * to mutate its value.
  */
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 #[repr(transparent)]
 pub struct ClasspadString(Vec<ClasspadChar>);
 impl ClasspadString {
@@ -142,12 +146,12 @@ impl ClasspadString {
         Self(chars)
     }
     /// Converts a list of classpad character codes into a [`ClasspadString`].
-    /// 
+    ///
     /// Refer to the classpad's character code list.
     pub fn from_classpad_chars(codes: &[usize]) -> Self {
         let a: Vec<ClasspadChar> = codes
-            .into_iter()
-            .filter_map(|code| ClasspadChar::from_classpad_char(code.clone()))
+            .iter()
+            .filter_map(|code| ClasspadChar::from_classpad_char(*code))
             .collect();
         Self(a)
     }
@@ -165,6 +169,10 @@ impl ClasspadString {
         }
         v
     }
+    /// Convert itself into a unicode string.
+    pub fn to_unicode_str(&self) -> String {
+        self.0.iter().filter_map(|c| c.to_unicode_char()).collect()
+    }
 }
 
 impl std::str::FromStr for ClasspadString {
@@ -181,18 +189,18 @@ impl std::str::FromStr for ClasspadString {
 }
 
 /// The XCP file's file type. Currently, only text files are supported.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum XCPFileType {
     /// text files (you can convert them into program files on the classpad).
     Text,
 }
 
 /// An XCP file.
-/// 
+///
 /// To read and write to a .xcp file, use [`XCPFile::read_from_file`] and [`XCPFile::write_to_file`].
 /// Note that this library does not guarantee generated/parsed XCP files won't be corrupted. Use the library's
 /// generated XCP files at your own risk.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct XCPFile {
     /// Currently only text files. This field is not important.
     pub file_type: XCPFileType,
@@ -204,8 +212,8 @@ pub struct XCPFile {
     pub var_name: String,
 }
 impl XCPFile {
-    /// Write the contents of this [`XCPFile`] into a [`Vec<u8>`] buffer. 
-    /// 
+    /// Write the contents of this [`XCPFile`] into a [`Vec<u8>`] buffer.
+    ///
     /// This function is mostly reserved for internal use.
     pub fn write_to_vec(&self) -> Vec<u8> {
         let mut content: Vec<u8> = vec![];
@@ -214,7 +222,7 @@ impl XCPFile {
             content.append(&mut bytes.clone());
             bytes
                 .iter()
-                .map(|b| Wrapping(*b as u8))
+                .map(|b| Wrapping(*b))
                 .sum::<Wrapping<u8>>()
         }
         fn push_byte(content: &mut Vec<u8>, byte: u8) -> Wrapping<u8> {
@@ -317,7 +325,7 @@ impl XCPFile {
         content
     }
     /// Write the contents of the [`XCPFile`] into an actual [`File`].
-    /// 
+    ///
     /// ```rust
     /// // create an [`XCPFile`] with the contents "abc", in the folder "main" with variable name "testvar".
     /// // Do note that var_name and folder_name provided should always be less than 8 bytes (characters).
@@ -336,8 +344,8 @@ impl XCPFile {
     /// // abc-output.xcp can be imported into the classpad.
     /// ```
     pub fn write_to_file(&self, file: &mut File) {
-        let mut contents = self.write_to_vec();
-        let _ = file.write_all(&mut contents).unwrap();
+        let contents = self.write_to_vec();
+        file.write_all(&contents).unwrap();
     }
     pub fn read_from_vec(content: Vec<u8>) -> Self {
         fn ascii_assert(input: &[u8], s: &str) {

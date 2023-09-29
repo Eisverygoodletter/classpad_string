@@ -1,6 +1,6 @@
 [package]
 name = "classpad_string"
-version = "0.1.1"
+version = "0.2.1"
 authors = ["Eisverygoodletter"]
 edition = "2021"
 description = "handle XCP files and strings for the Classpad fx-400"
